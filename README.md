@@ -1,0 +1,1 @@
+This is a solution for SQL Server. The objective is to calculate the result of a numeric expression held in a character string. This was originally submitted to Stack overflow, but due to their size limitation of 30,000 characters, I had to drop 40% of the functionality in order to submit the solution. I hope that GitHub will allow me to enter all 43,000 characters.
