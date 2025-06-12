@@ -1,0 +1,1539 @@
+create or ALTER FUNCTION [dbo].[mthscnvrt09](@strng varchar(60))
+RETURNS varchar(220)
+AS
+BEGIN
+
+/*
+
+This function takes in a numeric string from a varchar column and translates it to its numeric value.
+
+In this data, the numeric strings always have 4 numbers, which are all integers, and three arithmetic 
+operators. 
+
+All numeric string calculations pair two numbers within parantheses. 
+E.g. '(((622788*57)*101)/1009)' or '(622788/((1009/57)/101))' etc... Which you, the eagle eyed observer 
+might have noticesd are actually equivalent.
+
+The value of @patern governs which section of code is executed.
+
+This data which this function is designed to process, has only the 5 @patern values listed below, so 
+that is all I have coded for.
+
+'(((non)on)on)'
+'((non)o(non))'
+'(no((non)on))'
+'((no(non))on)'
+'(no(no(non)))'
+
+The @patern symbols '(' and ')' control order of execution. The n's represent
+the 4 numbers, num1, num2, num3 and num4 from left to right. The o's represent 
+the arithmetic operators, opo1, opo2 and opo3 from left to right.
+
+We are only interested in the general form of @patern, not the details, so the 
+'replace' code below reduces @patern strings like '(((nnnnnnonn)onnn)onnnn)' or
+'(nnnnnno((nnnnonn)onnnn))' to the basic form: '(((non)on)on)' or (no((non)on)) etc.
+
+*/
+
+
+declare @ret1 varchar(20)
+
+declare @ret2 varchar(180)
+
+declare @ret3 varchar(100)
+
+declare  @where  smallint
+
+DECLARE @dbg smallint
+-- set @dbg= substring(@strng,1,1)
+
+DECLARE @opo1 varchar(1)
+set @opo1='x'
+
+DECLARE @opo2 varchar(1)
+set @opo2='x'
+
+DECLARE @opo3 varchar(1)
+set @opo3='x'
+
+DECLARE @opostrng varchar(3)
+
+declare @num1_int int 
+
+
+declare @num1char varchar(10)
+
+declare @num1cwnt smallint
+
+set @num1char = '|'
+
+set @num1cwnt = -1
+
+set @num1_int = 0
+
+declare @num2_int int 
+
+declare @num2char varchar(10)
+
+declare @num2cwnt smallint
+
+set @num2char = '|'
+
+set @num2cwnt = -1
+
+
+declare @num3_int int 
+
+declare @num3char varchar(10)
+
+declare @num3cwnt smallint
+
+set @num3char = '|'
+
+set @num3cwnt = -1
+
+declare @num4_int int 
+
+declare @num4char varchar(10)
+
+declare @num4cwnt smallint
+
+set @num4char = '|'
+
+set @num4cwnt = -1
+
+-- sql error line 7  !!!!!!!!!!
+
+declare @sign varchar(1)
+
+set @sign = ' '
+
+declare @numerator_n38 numeric(38,0)
+
+declare @denominator_n38  numeric(38,0)
+
+declare @numerator_b_n38 numeric(38,0)
+
+declare @denominator_b_n38  numeric(38,0)
+
+declare @temp_holder_n38  numeric(38,0)
+
+declare @division_n3820 numeric(38,20)
+
+declare @division_b_n3820 numeric(38,20)
+
+declare @dcmlpart_n3837 numeric(38,37)
+
+declare @remndr_n3820 numeric(38,20)
+
+declare @remndr_len_smallint smallint
+
+declare @my_bigint bigint
+
+declare @curval varchar(1)
+
+declare @prevval varchar(1)
+
+declare @mathstrng varchar(60)
+
+declare @loopval smallint
+set @loopval=2
+
+declare @strnglen smallint
+
+declare @patern varchar(60)
+
+declare @numflag smallint
+set  @numflag=0
+
+
+set @patern='('
+
+set @prevval='('
+
+-- set @mathstrng =substring(@strng,2,59)
+set @mathstrng =@strng
+
+set @strnglen = len(@mathstrng)
+
+
+--  This is the while loop which parses the pattern of the string
+--
+--  @loopval begins at 2 because we know first char is always a '('
+
+
+while @loopval <= @strnglen
+begin
+
+
+-- gets each character from the string, 1 by 1
+
+set @curval = substring(@mathstrng,@loopval,1)
+
+
+
+if @curval = '(' or @curval = ')'
+begin
+set @patern=@patern+@curval
+end
+
+
+-- constructs each of the arithmetic operators. 
+
+if @curval in ( '/','+','-','*')
+begin
+
+
+-- builds the general pattern of the arithemetic expression 
+
+set @patern=@patern +'o'
+
+
+-- begins construction of each of the arithmetic operators. 
+
+if @opo1='x'
+begin
+set @opo1 = @curval
+end
+
+else if @opo2='x'
+begin
+set @opo2 = @curval
+end
+
+else if @opo3='x'
+begin
+set @opo3 = @curval
+end
+
+end  --  if @opo1='x'
+
+--  ends construction of each of the arithmetic operators. 
+
+
+-- below if block processes the 4 numeric stings
+
+if @curval between '0' and '9'
+begin
+
+
+-- builds the general pattern of the arithemetic expression 
+
+set @patern=@patern+'n'
+
+
+
+-- below if block indicates which of the 4 number stings to process
+
+if @num1cwnt = -1
+begin
+set @numflag=1
+--
+set @num1cwnt=@loopval
+end
+
+else if @num2cwnt = -1 and (@prevval not between '0' and '9')
+begin
+set @numflag=2
+--
+set @num2cwnt=@loopval
+end
+
+else if @num3cwnt = -1 and (@prevval not between '0' and '9')
+begin
+set @numflag=3
+--
+set @num3cwnt=@loopval
+end
+
+else if @num4cwnt = -1 and (@prevval not between '0' and '9')
+begin
+set @numflag=4
+--
+set @num4cwnt=@loopval
+end
+
+-- End of block indicating which of the 4 number stings to process
+
+
+
+
+-- begin if block indicates which of the 4 number stings we are constructing
+
+if @numflag=1
+begin
+set @num1char=@num1char+@curval
+end
+
+else if @numflag=2
+begin
+set @num2char=@num2char+@curval
+end
+
+else if @numflag=3
+begin
+set @num3char=@num3char+@curval
+end
+
+else if @numflag=4
+begin
+set @num4char=@num4char+@curval
+end
+
+-- end if block indicating which of the 4 number stings we are constructing
+
+
+end  
+-- End if block processing the 4 numeric stings
+
+
+
+-- keeps track of current, next and previous characters 
+
+set  @loopval=@loopval+1
+set  @prevval = @curval
+
+
+end  
+
+--  End of main while @loopval <= @strnglen
+
+
+
+-- parsing is now complete
+
+/*
+We are only interested in the general form of @patern, not the details, so the 
+'replace' code below reduces @patern strings like '(((nnnnnnonn)onnn)onnnn)' or
+'(nnnnnno((nnnnonn)onnnn))' to the basic form: '(((non)on)on)' or (no((non)on)) etc.
+*/
+
+set @patern = replace(@patern,'nnnnnnnnn','n')
+set @patern = replace(@patern,'nnnnnnnn','n')
+set @patern = replace(@patern,'nnnnnnn','n')
+set @patern = replace(@patern,'nnnnnn','n')
+set @patern = replace(@patern,'nnnnn','n')
+set @patern = replace(@patern,'nnnn','n')
+set @patern = replace(@patern,'nnn','n')
+set @patern = replace(@patern,'nn','n')
+
+
+-- create each numeric value from its string value
+
+set @num1_int = convert (int,substring(@num1char,2,9))
+set @num2_int = convert (int,substring(@num2char,2,9))
+set @num3_int = convert (int,substring(@num3char,2,9))
+set @num4_int = convert (int,substring(@num4char,2,9))
+
+
+
+-- the variable @opostrng helps to indicate which code to execute
+
+set @opostrng=@opo1+@opo2+@opo3
+
+--set @ret2 = @patern  --@num1char+@num2char+@num3char+@num4char
+--goto mout
+
+
+--set @ret2 = @patern  
+--goto mout2
+
+if @patern = '(((non)on)on)'   --____________________________________________________
+begin
+
+
+--I am ((() this helps to navigate around the code
+
+
+--set @ret2 = 'went into (((non)on)on)'
+--goto mout
+
+
+--  this code processes expresssions of the form '(((n1 op1 n2) op2 n3) op3 n4)'
+
+--  set numerator and denominator as required at each step
+
+--  1st performing (n1 op1 n2)
+
+
+set @numerator_n38 = @num1_int 
+
+set @denominator_n38  = 1
+
+-- __________________  process @opo1 and @num2_int  _____________________
+
+     if @opo1 = '/' set @denominator_n38  = @denominator_n38  * @num2_int 
+else if @opo1 = '-' set @numerator_n38 = @numerator_n38 - @num2_int 
+else if @opo1 = '*' set @numerator_n38 = @numerator_n38 * @num2_int 
+else if @opo1 = '+' set @numerator_n38 = @numerator_n38 + @num2_int 
+
+-- _________________  End process @opo1 and @num2_int ___________________
+
+
+
+-- ___________________  process @opo2 and @num3_int  _____________________
+
+
+--  2nd performing (X op2 n3)
+
+
+if @denominator_n38  < 1.00000000000001  
+
+--  @denominator_n38   denominator is still 1, so perform normal processing
+
+begin
+     if @opo2 = '/' set @denominator_n38  = @denominator_n38  * @num3_int 
+else if @opo2 = '*' set @numerator_n38 = @numerator_n38 * @num3_int
+else if @opo2 = '-' set @numerator_n38 = @numerator_n38 - @num3_int 
+else if @opo2 = '+' set @numerator_n38 = @numerator_n38 + @num3_int 
+end
+
+else begin          
+
+--  @denominator_n38   denominator is changed, so perform altered processing
+
+
+--  operators @opo2 = '/' or  @opo2 = '*' are not affected so process as normal
+
+     if @opo2 = '/' set @denominator_n38  = @denominator_n38  * @num3_int 
+else if @opo2 = '*' set @numerator_n38 = @numerator_n38 * @num3_int
+
+--  operators @opo2 = '-' or  @opo2 = '+'  must multiply by denominator before adding or subtracting
+
+else if @opo2 = '-' set @numerator_n38 = @numerator_n38 - (@num3_int *@denominator_n38 )
+else if @opo2 = '+' set @numerator_n38 = @numerator_n38 + (@num3_int *@denominator_n38 )
+
+end
+
+-- ____________  End process @opo2 and @num3_int  ________________
+
+
+
+-- ______________  process @opo3 and @num4_int  ___________________
+
+
+--  3rd performing (X op3 n4)
+
+if @denominator_n38  < 1.000000000000001  
+
+--  @denominator_n38   denominator is still 1, so perform normal processing
+
+begin
+     if @opo3 = '/' set @denominator_n38  = @denominator_n38  * @num4_int 
+else if @opo3 = '-' set @numerator_n38 = @numerator_n38 - @num4_int 
+else if @opo3 = '*' set @numerator_n38 = @numerator_n38 * @num4_int 
+else if @opo3 = '+' set @numerator_n38 = @numerator_n38 + @num4_int 
+end
+
+
+else begin            
+
+--  @denominator_n38   denominator is changed, so perform altered processing
+
+--  operators  @opo3 = '/' or  @opo3 = '*'  are not affected so process as normal
+
+     if @opo3 = '/' set @denominator_n38  = @denominator_n38  * @num4_int  
+else if @opo3 = '*' set @numerator_n38 = @numerator_n38 * @num4_int
+
+
+
+
+--  operators  @opo3 = '-' or  @opo3 = '+'  must multiply by denominator before 
+--  adding or subtracting
+
+else if @opo3 = '-' set @numerator_n38 = @numerator_n38 - (@denominator_n38  * @num4_int)
+else if @opo3 = '+' set @numerator_n38 = @numerator_n38 + (@denominator_n38  * @num4_int)
+
+
+end
+
+end
+
+
+--____________  End process @opo3 and @num4_int  ____________________
+ 
+
+-- I am ((()  this helps to navigate around the code
+
+
+-- End if @patern = '(((non)on)on)'  --______________________________________________
+
+
+
+/*
+a/b / c/d = x/ c/d = xd/c = ad/bc ?  1/2 / 3/4 = 1.4/2.3 = 4/6 correct - so what ???
+
+n1/n2 / n3/n4 == n1*n4 / n2*n3
+
+or num/denom / num2/denom2 == num* denom2/ denom*num2
+
+*/
+
+ --             ((non)o(non))
+
+if @patern = '((non)o(non))'   --____________________________________________________
+begin
+
+
+--I am (())  this helps to navigate around the code
+
+
+-- Processing '((n1 op1 n2) op2 (n3 op3 n4)'
+
+-- set numerator and denominator as required at each step
+
+-- processing (n1 op1 n2)
+
+set @numerator_n38 = @num1_int 
+set @denominator_n38 = 1
+
+-- __________________  process @num1_int @opo1 and @num2_int  _____________________
+
+     if @opo1 = '/' set @denominator_n38 = @denominator_n38 * @num2_int 
+else if @opo1 = '-' set @numerator_n38 = @numerator_n38 - @num2_int 
+else if @opo1 = '*' set @numerator_n38 = @numerator_n38 * @num2_int 
+else if @opo1 = '+' set @numerator_n38 = @numerator_n38 + @num2_int 
+
+--  REGARD THIS RESULT AS X
+
+-- _________________  End process @num1_int @opo1 and @num2_int ___________________
+
+
+
+--  processing (n3 op3 n4)
+
+set @numerator_b_n38 = @num3_int 
+set @denominator_b_n38 = 1
+
+-- __________________  process @num3_int @opo3 and @num4_int  _____________________
+
+     if @opo3 = '/' set @denominator_b_n38 = @denominator_b_n38 * @num4_int 
+else if @opo3 = '-' set @numerator_b_n38 = @numerator_b_n38 - @num4_int 
+else if @opo3 = '*' set @numerator_b_n38 = @numerator_b_n38 * @num4_int 
+else if @opo3 = '+' set @numerator_b_n38 = @numerator_b_n38 + @num4_int 
+
+--  REGARD THIS RESULT AS Y
+
+-- _________________  End process @num3_int @opo3 and @num4_int ___________________
+
+
+-- __________________  process X @opo2 Y  _____________________
+
+set @where = 0
+
+--  processes expressions with no '/' operators 
+
+if charindex( '/', @opostrng ) < 0.5
+begin
+
+--set @where = 1
+
+     if @opo2 = '-' set @numerator_n38 = @numerator_n38 - @numerator_b_n38 
+else if @opo2 = '*' set @numerator_n38 = @numerator_n38 * @numerator_b_n38
+else if @opo2 = '+' set @numerator_n38 = @numerator_n38 + @numerator_b_n38
+
+end
+
+--  processes expressions with at least one '/' operator
+
+else if charindex( '/', @opostrng ) > 0.5
+begin
+
+
+--  processes expressions with only one central '/' operator. it does this by 
+--  collapsing '/' characters within the 3 character string @opostrng, and then 
+--  looking for a stringlength of two.
+
+--  e.g. ((x-x)/(x+x)) , ((x*x)/(x+x))  etc
+
+if ( @opo2 = '/' ) and  (  len ( replace(@opostrng,'/','') ) =2  )
+begin
+
+--  n1-n2 / n3-n4 == num / num_b 
+--  n1-n2 / n3+n4 == num / num_b 
+--  n1*n2 / n3+n4 == num / num_b 
+--  etc etc
+
+set @where = 1
+
+--  the denominator value is held in @numerator_b_n38 from above, but it has 
+--  to be explicitly set here; the division is processed further along in this 
+--  code (see below, near end)
+
+set @denominator_n38 = @numerator_b_n38
+
+end  --  if ( @opo2 = '/' ) and  (  len ( replace(@opostrng,'/','') ) =2  )
+
+else
+begin
+
+--  below processes expressions with one or more '/' operator. 
+
+set @numerator_n38     = @num1_int 
+set @denominator_n38   = @num2_int 
+set @numerator_b_n38   = @num3_int 
+set @denominator_b_n38 = @num4_int 
+
+
+if @opostrng like '//_'
+begin
+
+--  n1 / n2 / n3 ? n4 == num/denom / num_b ? denom_b 
+
+
+--  '///'
+
+if @opo3 = '/' 
+begin
+
+--  n1/n2 / n3/n4 == num/denom / num_b/denom_b == num*denom_b / denom*num_b
+
+--  this rearrangement significantly increases accuracy
+
+set @numerator_n38   = @numerator_n38   * @denominator_b_n38
+set @denominator_n38 = @denominator_n38 * @numerator_b_n38
+
+end
+
+--  '//*'
+
+else if @opo3 = '*' set @denominator_n38 = 
+( @denominator_n38 * @numerator_b_n38 * @denominator_b_n38 )
+
+--  '//-'
+
+else if @opo3 = '-' set @denominator_n38 = 
+( @denominator_n38 * (@numerator_b_n38 - @denominator_b_n38) )
+
+--  '//+'
+
+else if @opo3 = '+' set @denominator_n38 = 
+( @denominator_n38 * (@numerator_b_n38 + @denominator_b_n38) )
+
+end
+
+-- ________________   End if @opostrng like '//_'
+
+
+else if @opostrng like '/*_'
+begin
+
+--  n1/n2 * n3/n4 == num/denom * num_b/denom_b == n1*n3/(n2*n4)
+--                                             == num*num_b / (denom*denom_b)
+
+--  '/*/'
+
+if @opo3 = '/' 
+begin
+
+set @numerator_n38   = @numerator_n38   * @numerator_b_n38
+set @denominator_n38 = @denominator_n38 * @denominator_b_n38 
+
+end
+
+--  n1/n2 * n3*n4 == num/denom * num_b*denom_b == (n1*n3*n4) /n2
+--                                             == (num * num_b * denom_b)/denom
+
+--  '/**'
+
+else if @opo3 = '*' set @numerator_n38 = 
+@numerator_n38 * @numerator_b_n38 * @denominator_b_n38 
+
+--  '/*-'
+
+else if @opo3 = '-' set @numerator_n38 = 
+@numerator_n38 * (@numerator_b_n38 - @denominator_b_n38) 
+
+--  '/*+'
+
+else if @opo3 = '+' set @numerator_n38 = 
+@numerator_n38 * (@numerator_b_n38 + @denominator_b_n38) 
+
+--  @denominator_n38  is already initialised
+
+end   
+
+-- ________________    End else if @opostrng like '/*_'
+
+
+
+
+else if @opostrng like '/+_'
+begin
+
+--  n1/n2 + n3/n4 == num/denom + num_b/denom_b ==  ( n1*n4 + n2*n3 ) / (n2*n4)
+--                ==  ( (num-denom_b) + denom*num_b) ) / ( denom * denom_b )     
+
+--   '/+/'
+
+if @opo3 = '/'
+begin
+
+set @numerator_n38   = @numerator_n38   * @denominator_b_n38
+set @numerator_n38   = @numerator_n38   + ( @denominator_n38 * @numerator_b_n38 )
+
+set @denominator_n38 = @denominator_n38 * @denominator_b_n38
+
+end   
+
+--  '/+*'
+
+else if @opo3 = '*' set @numerator_n38 = 
+@numerator_n38 + ( @denominator_n38 * @numerator_b_n38 * @denominator_b_n38 )
+
+--  '/+-'
+
+else if @opo3 = '-' set @numerator_n38 = 
+@numerator_n38 + (  @denominator_n38 *( @numerator_b_n38 - @denominator_b_n38 )  )
+
+--  '/++'
+
+else if @opo3 = '+' set @numerator_n38 = 
+@numerator_n38 + (  @denominator_n38 *( @numerator_b_n38 + @denominator_b_n38 )  )
+
+--  @denominator_n38 is already set correctly at initialisation
+
+end   
+
+-- ________________    End else if @opostrng = '/+_'
+
+else if @opostrng like '/-_'
+begin
+
+--  n1-n2 / n3/n4 == num-denom / num_b/denom_b ==  ( n1-n2 / n3/n4 ) / (n2*n4)
+--                                             ==  ( (num-denom) * denom_b) / num_b       
+-- '/-?' ==  num - (numb * denom) / denom
+
+--  '/-/'
+
+if @opo3 = '/'
+begin
+
+--  n1/n2 - n3/n4 == num/denom - num_b/denom_b ==  ( n1*n4 - n2*n3 ) / (n2*n4)
+--                          ==  ( num*denom_b - denom*num_b ) )/ denom*denom_b
+
+set @numerator_n38   = @numerator_n38   * @denominator_b_n38
+set @numerator_n38   = @numerator_n38   - ( @denominator_n38 * @numerator_b_n38 )
+set @denominator_n38 = @denominator_n38 * @denominator_b_n38
+
+end   
+
+--  '/-*'
+
+else if @opo3 = '*' set @numerator_n38 = 
+@numerator_n38 - ( @denominator_n38 * @numerator_b_n38 * @denominator_b_n38 )
+
+--  '/--'
+
+else if @opo3 = '-' set @numerator_n38 = 
+@numerator_n38 - (  @denominator_n38 *( @numerator_b_n38 - @denominator_b_n38 )  )
+
+--  '/-+'
+
+else if @opo3 = '+' set @numerator_n38 = 
+@numerator_n38 - (  @denominator_n38 *( @numerator_b_n38 + @denominator_b_n38 )  )
+
+--  @denominator_n38 is already set correctly at initialisation
+
+end   
+
+-- ________________    End else if @opostrng = '/-_'
+
+
+else if @opostrng like '_-/'
+begin
+
+--  n1-n2 / n3/n4 == num-denom / num_b/denom_b ==  ( n1-n2 / n3/n4 ) / (n2*n4)
+--                                             ==  ( (num-denom) * denom_b) / num_b       
+-- '/-?' ==  num - (numb * denom) / denom
+
+--  a*b - c/d  ==  (a*b*d )- c /d  
+
+--  '*-/'
+
+if @opo1 = '*' set   @numerator_n38 = 
+( @numerator_n38 * @denominator_n38 * @denominator_b_n38 ) - @numerator_b_n38 
+
+--  '--/'
+
+if @opo1 = '-' set   @numerator_n38 = 
+( (@numerator_n38 - @denominator_n38 ) * @denominator_b_n38 ) - @numerator_b_n38 
+
+--  '+-/'
+
+if @opo1 = '+' set   @numerator_n38 = 
+( (@numerator_n38 + @denominator_n38 ) * @denominator_b_n38 ) - @numerator_b_n38 
+
+set @denominator_n38 = @denominator_b_n38
+
+end   
+
+-- ________________    End else if @opostrng like '_-/
+
+else if @opostrng like '_+/'
+begin
+
+--  n1-n2 / n3/n4 == num-denom / num_b/denom_b ==  ( n1-n2 / n3/n4 ) / (n2*n4)
+--                                             ==  ( (num-denom) * denom_b) / num_b       
+
+
+if @opo1 = '*' set   @numerator_n38 = 
+( @numerator_n38 * @denominator_n38 * @denominator_b_n38 ) + @numerator_b_n38 
+
+if @opo1 = '-' set   @numerator_n38 = 
+( (@numerator_n38 - @denominator_n38 ) * @denominator_b_n38 ) + @numerator_b_n38 
+
+if @opo1 = '+' set   @numerator_n38 = 
+( (@numerator_n38 + @denominator_n38 ) * @denominator_b_n38 ) + @numerator_b_n38 
+
+set @denominator_n38 = @denominator_b_n38
+
+
+end   
+
+-- ________________    End else if @opostrng like '_+/'
+
+else if @opostrng like '_*/'
+begin
+
+--  n1-n2 / n3/n4 == num-denom / num_b/denom_b ==  ( n1-n2 / n3/n4 ) / (n2*n4)
+--                                             ==  ( (num-denom) * denom_b) / num_b       
+
+
+if @opo1 = '*' set   @numerator_n38 = 
+( @numerator_n38 * @denominator_n38 * @numerator_b_n38  ) 
+
+if @opo1 = '-' set   @numerator_n38 = 
+( (@numerator_n38 - @denominator_n38 ) * @numerator_b_n38  ) 
+
+if @opo1 = '+' set   @numerator_n38 = 
+( (@numerator_n38 + @denominator_n38 ) * @numerator_b_n38  ) 
+
+set @denominator_n38 = @denominator_b_n38
+
+
+end   
+
+-- ________________    End else if @opostrng like '_*/'
+
+
+else if @opostrng like '_//'
+begin
+
+--  n1-n2 / n3/n4 == num-denom / num_b/denom_b ==  ( n1-n2 / n3/n4 ) / (n2*n4)
+--                                             ==  ( (num-denom) * denom_b) / num_b       
+
+if @opo1 = '*' set   @numerator_n38 = 
+( @numerator_n38 * @denominator_n38 * @denominator_b_n38  ) 
+
+if @opo1 = '-' set   @numerator_n38 = 
+( (@numerator_n38 - @denominator_n38 ) * @denominator_b_n38  ) 
+
+if @opo1 = '+' set   @numerator_n38 = 
+( (@numerator_n38 + @denominator_n38 ) * @denominator_b_n38  ) 
+
+set @denominator_n38 = @numerator_b_n38
+
+end   -- _______   End else if @opostrng like '_//'
+
+
+end  -- else of "if ( @opo2 = '/' ) and  ( len ( replace(@opostrng,'/','') ) =2 )"
+
+
+end   -- if charindex( '/', @opostrng ) > 0.5
+
+
+-- __________________  End process X @opo2 Y  _____________________
+
+
+
+end
+
+-- goto mout2
+
+-- I am (())  this helps to navigate around the code
+
+-- End if @patern = '((non)o(non))'  --______________________________________________
+
+
+
+ --             (no((non)on))
+
+if @patern = '(no((non)on))'   --____________________________________________________
+begin
+
+
+--I am (nn))  this helps to navigate around the code
+
+
+-- Processing '(n1 op1 ((n2 op2 n3) op3 n4))'
+                        -----------
+
+-- set numerator and denominator as required at each step
+
+-- processing (n2 op2 n3)
+
+set @numerator_n38 = @num2_int 
+set @denominator_n38 = 1
+
+-- __________________  process @num2_int @opo2 and @num3_int  _____________________
+
+     if @opo2 = '/' set @denominator_n38 = @denominator_n38 * @num3_int 
+else if @opo2 = '-' set @numerator_n38 = @numerator_n38 - @num3_int 
+else if @opo2 = '*' set @numerator_n38 = @numerator_n38 * @num3_int 
+else if @opo2 = '+' set @numerator_n38 = @numerator_n38 + @num3_int 
+
+
+-- _________________  End process @num2_int @opo2 and @num3int ___________________
+
+
+
+-- Processing '(n1 op1 ((n2 op2 n3) op3 n4))'
+--                                  ------
+
+--  processing (X op3 n4)
+
+if @denominator_n38  >= 1 and @denominator_n38  < 1.000000000000001 
+
+--  @denominator_n38   denominator is still 1, so perform normal processing
+
+begin
+     if @opo3 = '/' set @denominator_n38  = @denominator_n38  * @num4_int 
+else if @opo3 = '*' set @numerator_n38 = @numerator_n38 * @num4_int
+else if @opo3 = '-' set @numerator_n38 = @numerator_n38 - @num4_int 
+else if @opo3 = '+' set @numerator_n38 = @numerator_n38 + @num4_int 
+end
+
+else begin          
+
+--  @denominator_n38   denominator is changed, so perform altered processing
+
+
+--  oporators @opo3 = '/' or  @opo3 = '*' are not affected so process as normal
+
+     if @opo3 = '/' set @denominator_n38  = @denominator_n38  * @num4_int 
+else if @opo3 = '*' set @numerator_n38 = @numerator_n38 * @num4_int
+
+--  oporators @opo3 = '-' or  @opo3 = '+'  must multiply by denominator before adding or subtracting
+
+else if @opo3 = '-' 
+set @numerator_n38 = @numerator_n38 - (@num4_int *@denominator_n38 )
+
+else if @opo3 = '+' 
+set @numerator_n38 = @numerator_n38 + (@num4_int *@denominator_n38 )
+
+end
+
+-- ____________  End process @opo3 and @num4_int (X op3 n4)  ________________
+
+
+
+-- __________________  process X @opo2 Y  _____________________
+
+set @where = 0
+
+-- Processing '(n1 op1 ((n2 op2 n3) op3 n4))'
+
+
+--set @where = 1
+
+
+if @denominator_n38 >=1 and @denominator_n38  < 1.00000000000000001  
+
+--  @denominator_n38   denominator is still 1, so perform normal processing
+
+begin
+     if @opo1 = '/' set @denominator_n38 =  @num1_int * @denominator_n38
+else if @opo1 = '-' set @numerator_n38 = @num1_int - @numerator_n38 
+else if @opo1 = '*' set @numerator_n38 = @num1_int * @numerator_n38 
+else if @opo1 = '+' set @numerator_n38 = @num1_int + @numerator_n38
+
+--  This is for @opostrng = /?? where ? is any of '* + -'.  
+--  When @opostrng like '/[*+-][*+-]' 
+--  or, when (@opo1 = '/') and (@opo2 <> '/') and (@opo3 <> '/') 
+
+--  we are looking for n1/( n2 ? n3 ? n4 ) where ? is any of * + -.
+--  At this point  @numerator_n38 = n2 ? n3 ? n4 and @denominator_n38 = n1.
+--  We want n1/( n2 ? n3 ? n4 ) , so we have to swap/ the two values in N 
+--  and D as below.
+
+--  if (@opo1 = '/') and (@opo2 <> '/') and (@opo3 <> '/')
+
+if @opostrng like '/[*+-][*+-]'
+begin
+
+set @ret1 = 'in /[*+-][*+-]'
+set @temp_holder_n38 = @numerator_n38  
+set @numerator_n38   = @denominator_n38
+set @denominator_n38 = @temp_holder_n38
+end
+
+end  --  if @opostrng like '/[*+-][*+-]'
+
+
+else    --  @denominator_n38 <> 1
+
+begin            
+
+--  @denominator_n38   denominator is changed, so perform altered processing
+
+--  oporators  @opo1 = '/' or  @opo1 = '*' are not affected so process as 
+--  normal
+
+     if @opo1 = '/' set @denominator_n38 = @num1_int * @denominator_n38
+else if @opo1 = '*' set @numerator_n38   = @num1_int * @numerator_n38 
+
+--  oporators  @opo1 = '-' or  @opo1 = '+'  must multiply by denominator before 
+--  adding or subtracting
+
+else if @opo1 = '-' 
+set @numerator_n38 = (@denominator_n38 * @num1_int) - @numerator_n38 
+
+else if @opo1 = '+' 
+set @numerator_n38 = (@denominator_n38 * @num1_int) + @numerator_n38
+
+
+--  When @opostrng = ///  or   @opostrng = //*  
+--  n1/ (n2/(n3*n4))  ==  n1*(n3*n4)/n2  ==  ( n1*n3*n4)/n2
+--  1st n2/n3  ==  N=n2, D=n3, then n2/(n3*n4)  ==   N=n2, D=n3*n4
+--  then n1/(n2/(n3*n4))  ==  (n1*n3*n4)/n2  ==   N=n2, D=n1*n3*n4. 
+--  However from the 1st line we want ( n1*n3*n4)/n2. So we have 
+--  to swap values of N and D as below.
+
+--  Also for @opostrng = //*
+--  n1/(n2*n4)/n3  ==  n1*n3/(n2*n4) N = (n2*n4) D = n1*n3
+--  So, once again, we have to swap N and D
+
+--  Also When @opostrng = '//?', where ? is either of '+ -'   
+--  n1/ (n2 ? n3*n4)/n3  ==  n1*n3/(n2 ? n3*n4), so we need  N=n1*n3, D=(n2 ? n3*n4)
+--  1st n2/n3  ==  N=n2, D=n3, then (n2 ? n3*n4)/n3, so N=(n2 ? n3*n4), D=n3
+--  then we want n1/((n2 ? n3*n4)/n3 ). However, the above processing gives us   
+--  N=(n2 ? n3*n4) and D=n3*n1.
+--  However from the 2nd line above line we want N=n1*n3, D=(n2 ? n3*n4). So, once 
+--  again, we have to swap values of N and D as below.
+
+if @opostrng like '//_'  --  where _ is any of '+ - * /' 
+begin
+
+set @ret1 = 'in //_ '
+set @temp_holder_n38 = @numerator_n38  
+set @numerator_n38   = @denominator_n38
+set @denominator_n38 = @temp_holder_n38
+end
+
+
+--  e.g. (958577566/((94447-966783884)/785))	
+--  Expression steps are below
+--  1. (b-c)  2. ((b-c)/d)  3. a/((b-c)/d)  ==  a*d/(b-c)
+--  Code actions are below
+--  1. N = (b-c)  D = 1 , 2. N = (b-c) D = d ,  3. N = (b-c)  D = a*d
+--  So, once again, we have to swop N and D
+
+else if @opostrng like '/_/'  --  where _ is any of '+ - * /' 
+begin
+
+set @ret1 = 'in /_/ '
+set @temp_holder_n38 = @numerator_n38  
+set @numerator_n38   = @denominator_n38
+set @denominator_n38 = @temp_holder_n38
+end
+
+
+end
+
+--  if @opostrng = '///' 
+
+end
+
+
+
+-- __________________  End process X @opo2 Y  _____________________
+
+
+-- I am (nn))  this helps to navigate around the code
+
+-- End if @patern = '(no((non)on))'  --______________________________________________
+
+
+
+--             ((no(non))on)    
+ 
+--       ((n1 op1 (n2 op2 n3)) op3 n4)
+
+
+if @patern = '((no(non))on)'   --____________________________________________________
+begin
+
+
+--I am (nn))  this helps to navigate around the code
+
+
+-- Processing '((n1 op1 (n2 op2 n3)) op3 n4)'
+                        -----------
+
+-- set numerator and denominator as required at each step
+
+-- processing (n2 op2 n3)
+
+set @numerator_n38 = @num2_int 
+set @denominator_n38 = 1
+
+-- __________________  process @num2_int @opo2 and @num3_int  _____________________
+
+     if @opo2 = '/' set @denominator_n38 = @denominator_n38 * @num3_int 
+else if @opo2 = '-' set @numerator_n38 = @numerator_n38 - @num3_int 
+else if @opo2 = '*' set @numerator_n38 = @numerator_n38 * @num3_int 
+else if @opo2 = '+' set @numerator_n38 = @numerator_n38 + @num3_int 
+
+
+-- _________________  End process @num2_int @opo2 and @num3int ___________________
+
+
+
+-- Processing '((n1 op1 (n2 op2 n3)) op3 n4)'
+--               ------
+
+--  processing (n1 op1 X)
+
+
+if @denominator_n38  >= 1 and @denominator_n38  < 1.000000000000001 
+
+--  @denominator_n38   denominator is still 1, so perform normal processing
+
+begin
+     if @opo1 = '/' set @denominator_n38 = @num1_int * @denominator_n38
+else if @opo1 = '*' set @numerator_n38   = @num1_int * @numerator_n38
+else if @opo1 = '-' set @numerator_n38   = @num1_int - @numerator_n38
+else if @opo1 = '+' set @numerator_n38   = @num1_int + @numerator_n38
+
+
+
+--  if the value of opo1 is '/' we have to swap the values in @numerator_n38 and @denominator_n38
+
+if @opo1 = '/' 
+begin
+
+set @temp_holder_n38 = @numerator_n38
+set @numerator_n38   = @denominator_n38
+set @denominator_n38 = @temp_holder_n38
+
+end  --  if opo1 = '/' 
+
+end
+
+else 
+begin          
+
+
+--  @denominator_n38   denominator exists, so perform altered processing as follows
+
+
+--  oporators @opo1 = '/' or  @opo1 = '*' are not affected so process as normal
+
+
+     if @opo1 = '/' set @denominator_n38 = @num1_int * @denominator_n38 
+else if @opo1 = '*' set @numerator_n38   = @num1_int * @numerator_n38
+
+--  oporators @opo1 = '-' or  @opo1 = '+'  must multiply by denominator before adding or subtracting
+
+else if @opo1 = '-' set @numerator_n38 = (@num1_int *@denominator_n38) - @numerator_n38
+
+else if @opo1 = '+' set @numerator_n38 = (@num1_int *@denominator_n38) + @numerator_n38
+
+
+
+--  if the value of opo1 is '/' we have to swap the values in @numerator_n38 and @denominator_n38
+
+if @opo1 = '/' 
+begin
+
+set @temp_holder_n38 = @numerator_n38
+set @numerator_n38   = @denominator_n38
+set @denominator_n38 = @temp_holder_n38
+
+end  --  if opo1 = '/' 
+
+end
+
+-- ____________  End process @opo3 and @num4_int (X op3 n4)  ________________
+
+
+--  ((no(non))on)
+
+
+-- __________________  process X @opo3 Y  _____________________
+
+set @where = 0
+
+-- Processing '((n1 op1 (n2 op2 n3)) op3 n4)'
+                                     ------
+
+--set @where = 1
+
+
+if @denominator_n38 >=1 and @denominator_n38  < 1.00000000000000001  
+
+--  @denominator_n38   denominator is still 1, so perform normal processing
+
+begin
+     if @opo3 = '/' set @denominator_n38 = @denominator_n38 * @num4_int
+else if @opo3 = '-' set @numerator_n38   = @numerator_n38   - @num4_int
+else if @opo3 = '*' set @numerator_n38   = @numerator_n38   * @num4_int
+else if @opo3 = '+' set @numerator_n38   = @numerator_n38   + @num4_int
+
+end
+
+else    --  @denominator_n38 <> 1
+
+begin            
+
+--  @denominator_n38   denominator exists, so perform altered processing
+
+
+--  oporators  @opo3 = '/' or  @opo3 = '*' are not affected so process as 
+--  normal
+
+
+     if @opo3 = '/' set @denominator_n38 = @denominator_n38 * @num4_int
+else if @opo3 = '*' set @numerator_n38   = @numerator_n38   * @num4_int
+
+--  when oporator @opo3 = '-' or  @opo3 = '+' we must multiply by denominator before 
+--  adding or subtracting
+
+
+else if @opo3 = '-' set @numerator_n38 = @numerator_n38 - (@denominator_n38 * @num4_int) 
+
+else if @opo3 = '+' set @numerator_n38 = @numerator_n38 + (@denominator_n38 * @num4_int)
+
+end
+
+
+end
+
+-- __________________  End process X @opo3 Y  _____________________
+
+
+-- I am (nn))  this helps to navigate around the code
+
+-- End if @patern = '((no(non))on)'  --______________________________________________
+
+--___________________________________________________________________________________
+
+
+
+--  Processing (no(no(non)))    
+ 
+if @patern = '(no(no(non)))'   --____________________________________________________
+begin
+
+--I am (nn)))  this helps to navigate around the code
+
+
+-- Processing '(n1 op1 (n2 op2 (n3 op3 n4)))'
+                               -----------
+
+-- set numerator and denominator as required at each step
+
+-- processing (n3 op3 n4)
+
+set @numerator_n38 = @num3_int 
+set @denominator_n38 = 1
+
+-- __________________  process @num3_int @opo3 and @num4_int  _____________________
+
+     if @opo3 = '/' set @denominator_n38 = @denominator_n38 * @num4_int 
+else if @opo3 = '-' set @numerator_n38 = @numerator_n38 - @num4_int 
+else if @opo3 = '*' set @numerator_n38 = @numerator_n38 * @num4_int 
+else if @opo3 = '+' set @numerator_n38 = @numerator_n38 + @num4_int 
+
+
+-- _________________  End process @num3_int @opo3 and @num4_int ___________________
+
+
+
+
+-- __________________  process @num2_int, @opo2 and X (n2 op2 X)  ________________
+
+
+-- Processing '(n1 op1 (n2 op2 (n3 op3 n4)))'
+--                      ------
+
+--  processing (n2 op2 X)
+
+
+if @denominator_n38  >= 1 and @denominator_n38  < 1.000000000000001 
+
+--  @denominator_n38   denominator is still 1, so perform normal processing
+
+begin
+     if @opo2 = '/' set @denominator_n38 = @num2_int * @denominator_n38
+else if @opo2 = '*' set @numerator_n38   = @num2_int * @numerator_n38
+else if @opo2 = '-' set @numerator_n38   = @num2_int - @numerator_n38
+else if @opo2 = '+' set @numerator_n38   = @num2_int + @numerator_n38
+
+
+
+--  if the value of opo2 is '/' we have to swap the values in @numerator_n38 and @denominator_n38
+
+if @opo2 = '/' 
+begin
+
+set @temp_holder_n38 = @numerator_n38
+set @numerator_n38   = @denominator_n38
+set @denominator_n38 = @temp_holder_n38
+
+end  --  if opo2 = '/' 
+
+
+end
+
+else begin          
+
+
+--  @denominator_n38   denominator exists, so perform altered processing as follows
+
+--  oporators @opo2 = '/' or  @opo2 = '*' are not affected so process as normal
+
+
+     if @opo2 = '/' set @denominator_n38 = @num2_int * @denominator_n38 
+else if @opo2 = '*' set @numerator_n38   = @num2_int * @numerator_n38
+
+--  oporators @opo2 = '-' or  @opo2 = '+'  must multiply by denominator before adding or subtracting
+
+else if @opo2 = '-' set @numerator_n38 = (@num2_int *@denominator_n38) - @numerator_n38
+
+else if @opo2 = '+' set @numerator_n38 = (@num2_int *@denominator_n38) + @numerator_n38
+
+
+if @opo2 = '/' 
+begin
+
+set @temp_holder_n38 = @numerator_n38
+set @numerator_n38   = @denominator_n38
+set @denominator_n38 = @temp_holder_n38
+
+end  --  if opo2 = '/' 
+
+end
+
+-- ___________________  End process @num2_int, @opo2 and X (n2 op2 X)  ________________
+
+
+
+-- __________________  process X @opo1 Y  _____________________
+
+
+-- I am (no(no  this helps to navigate around the code
+
+
+set @where = 0
+
+-- Processing '(n1 op1 ((n2 op2 n3) op3 n4))'
+--              ------
+
+--set @where = 1
+
+
+if @denominator_n38 >=1 and @denominator_n38  < 1.00000000000000001  
+
+--  @denominator_n38   denominator is still 1, so perform normal processing
+
+begin
+     if @opo1 = '/' set @denominator_n38 =  @num1_int * @denominator_n38
+else if @opo1 = '-' set @numerator_n38 = @num1_int - @numerator_n38 
+else if @opo1 = '*' set @numerator_n38 = @num1_int * @numerator_n38 
+else if @opo1 = '+' set @numerator_n38 = @num1_int + @numerator_n38
+
+--  This is for @opostrng = /?? where ? is any of '* + -'.  
+--  When @opostrng like '/[*+-][*+-]' or, when (@opo3 = '/') and (@opo2 <> '/') and 
+--  (@opo1 <> '/') 
+--  we are looking for n1/( n2 ? n3 ? n4 ) where ? is any of * + -.
+--  At this point  @numerator_n38 = n2 ? n3 ? n4 and @denominator_n38 = n1.
+--  We want n1/( n2 ? n3 ? n4 ) , so we have to swap/ the two values in N 
+--  and D as below.
+
+--  if (@opo1 = '/') and (@opo2 <> '/') and (@opo3 <> '/')
+
+if @opostrng like '/[*+-][*+-]'
+begin
+
+set @ret1 = 'in /[*+-][*+-]'
+set @temp_holder_n38 = @numerator_n38  
+set @numerator_n38   = @denominator_n38
+set @denominator_n38 = @temp_holder_n38
+end
+
+end  --  if @opostrng like '/[*+-][*+-]'
+
+
+else    --  @denominator_n38 <> 1
+
+begin            
+
+--  @denominator_n38   denominator is changed, so perform altered processing
+
+--  oporators  @opo1 = '/' or  @opo1 = '*' are not affected so process as 
+--  normal
+
+     if @opo1 = '/' set @denominator_n38 = @num1_int * @denominator_n38
+else if @opo1 = '*' set @numerator_n38   = @num1_int * @numerator_n38 
+
+--  oporators  @opo1 = '-' or  @opo1 = '+'  must multiply by denominator before 
+--  adding or subtracting
+
+else if @opo1 = '-' 
+set @numerator_n38 = (@denominator_n38 * @num1_int) - @numerator_n38 
+
+else if @opo1 = '+' 
+set @numerator_n38 = (@denominator_n38 * @num1_int) + @numerator_n38
+
+
+--  When @opostrng = ///  or   @opostrng = //*  
+--  n1/ (n2/(n3*n4))  ==  n1*(n3*n4)/n2  ==  ( n1*n3*n4)/n2
+--  1st n2/n3  ==  N=n2, D=n3, then n2/(n3*n4)  ==   N=n2, D=n3*n4
+--  then n1/(n2/(n3*n4))  ==  (n1*n3*n4)/n2  ==   N=n2, D=n1*n3*n4. 
+--  However from the 1st line we want ( n1*n3*n4)/n2. So we have 
+--  to swap values of N and D as below.
+
+--  Also for @opostrng = //*
+--  n1/(n2*n4)/n3  ==  n1*n3/(n2*n4) N = (n2*n4) D = n1*n3
+--  So, once again, we have to swap N and D
+
+--  Also When @opostrng = '//?', where ? is either of '+ -'   
+--  n1/ (n2 ? n3*n4)/n3  ==  n1*n3/(n2 ? n3*n4), so we need  N=n1*n3, D=(n2 ? n3*n4)
+--  1st n2/n3  ==  N=n2, D=n3, then (n2 ? n3*n4)/n3, so N=(n2 ? n3*n4), D=n3
+--  then we want n1/((n2 ? n3*n4)/n3 ). However, the above processing gives us   
+--  N=(n2 ? n3*n4) and D=n3*n1.
+--  However from the 2nd line above line we want N=n1*n3, D=(n2 ? n3*n4). So, once 
+--  again, we have to swap values of N and D as below.
+
+if @opostrng like '//_'  --  where _ is any of '+ - * /' 
+begin
+
+set @ret1 = 'in //_ '
+set @temp_holder_n38 = @numerator_n38  
+set @numerator_n38   = @denominator_n38
+set @denominator_n38 = @temp_holder_n38
+end
+
+
+--  (958577566/((94447-966783884)/785))	
+--  Expression steps are below
+--  1. (b-c)  2. ((b-c)/d)  3. a/((b-c)/d)  ==  a*d/(b-c)
+--  Code actions are below
+--  1. N = (b-c)  D = 1 , 2. N = (b-c) D = d ,  3. N = (b-c)  D = a*d
+--  So, once again, we have to swop N and D
+
+else if @opostrng like '/_/'  --  where _ is any of '+ - * /' 
+begin
+
+set @ret1 = 'in /_/ '
+set @temp_holder_n38 = @numerator_n38  
+set @numerator_n38   = @denominator_n38
+set @denominator_n38 = @temp_holder_n38
+end
+
+
+end
+
+--  if @opostrng = '///' 
+
+
+end
+
+-- __________________  End process X @opo1 Y  _____________________
+
+-- I am (nn)))  this helps to navigate around the code
+
+-- End if @patern = '(no(no(non)))'  --______________________________________________
+
+--___________________________________________________________________________________
+
+
+
+if not (@denominator_n38 >=1 and  @denominator_n38  < 1.000000000000001) 
+
+--  The mod function 'x%y' appears to give starange results when
+--  negative numbers are involved (the results given are the reverse 
+--  of my calculator), I have decided to take direct control.
+
+--  if both D and R are the same sign there is no need for any action 
+
+if ( (@numerator_n38 <0) and (@denominator_n38 >0) )
+or ( (@numerator_n38 >0) and (@denominator_n38 <0) )
+begin
+
+set @sign = '-'
+set @numerator_n38 = abs(@numerator_n38)
+set @denominator_n38 = abs(@denominator_n38)
+
+end
+else if ( (@numerator_n38 <0) and (@denominator_n38 <0) )
+begin
+
+set @numerator_n38 = abs(@numerator_n38)
+set @denominator_n38 = abs(@denominator_n38)
+
+end  --  if both D and R are the same sign there is no need for action 
+
+
+--  if NOT (@denominator_n38 >=1 and  @denominator_n38  < 1.000000000000001 
+
+
+if @denominator_n38 >=1 and  @denominator_n38  < 1.000000000000001 
+set @ret2 = @sign+cast( @numerator_n38 as varchar(36) )
+else 
+begin
+
+set @remndr_n3820 = @numerator_n38 % @denominator_n38  
+set @numerator_n38 = @numerator_n38 - @remndr_n3820 
+
+
+-- the value of numerator @numerator_n38 , is now an exact multiple of the 
+-- denominator @denominator_n38 , so we can perform integer division to 
+-- get the integer part of the result
+
+set @numerator_n38 = @numerator_n38/@denominator_n38  
+
+--  if the decimal part is effectively 0 then report the integer part only,
+--  otherwise determine the decimal part
+
+--  although there are 4 numbers with up to 9 digits each, in practice the 
+--  remainder will always fit into a numeric(38,20)
+
+
+if abs( @remndr_n3820 / @denominator_n38 )  < 0.00000000000000000001
+set @ret2 = @sign+cast( @numerator_n38 as varchar(36) )
+else 
+
+if @numerator_n38  <> 0
+
+set @ret2 = 
+concat(
+@sign
+,
+cast( @numerator_n38 as varchar(36) ) 
+,
+cast( 
+format( @remndr_n3820 / @denominator_n38 ,'.########################' )
+as varchar(40) )
+)
+
+else
+
+set @ret2 = 
+concat(
+@sign,
+cast (
+format ( @remndr_n3820 / @denominator_n38,'0.########################')
+as varchar(40) )
+)
+
+end  --  if abs( @remndr_n3820 / @denominator_n38 )  < 0.00000000000000000001
+
+
+RETURN (@ret2)
+
+end
+
+
