@@ -3,6 +3,7 @@ This is a solution for SQL Server. The objective is to calculate the result of a
 The function is called in the usual ways:
 
 select [myaksess].[dbo].[mthscnvrt10]('(((958577566/94447)+966988999)*785)')
+
 select top 10 pict, [myaksess].[dbo].[mthscnvrt10](pict) as mathpict_result from [myaksess].[dbo].[pick4s]
 
 If SQLServer allowed us a 'read-only' version of sp_executesql e.g. sp_executesql_ro, then we could get 
